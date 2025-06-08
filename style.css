@@ -1,0 +1,121 @@
+واصلين! هذا هو الملف الثالث.
+
+---
+
+### **الملف 3: `style.css`**
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f0f0f0;
+    margin: 0;
+}
+
+.game-container {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    text-align: center;
+}
+
+h1 {
+    color: #333;
+    margin-bottom: 20px;
+}
+
+#player-info {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #555;
+}
+
+#status-message {
+    font-size: 1.1em;
+    margin-bottom: 15px;
+    color: #007bff; /* Blue for status */
+}
+
+.dama-board {
+    display: grid;
+    grid-template-columns: repeat(8, 60px);
+    grid-template-rows: repeat(8, 60px);
+    border: 3px solid #333;
+    margin: 20px auto;
+}
+
+.square {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.8em;
+    cursor: pointer;
+    position: relative; /* For pieces */
+}
+
+.light-square {
+    background-color: #eee; /* Light color for squares */
+}
+
+.dark-square {
+    background-color: #666; /* Dark color for squares (where pieces move) */
+}
+
+.piece {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+}
+
+.piece.dark {
+    background-color: #333; /* Dark piece color */
+    color: white;
+}
+
+.piece.light {
+    background-color: #bbb; /* Light piece color */
+    color: black;
+}
+
+.piece.selected {
+    border: 3px solid #00ff00; /* Green border for selected piece */
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.7);
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.valid-move {
+    background-color: rgba(0, 255, 0, 0.3); /* Highlight valid move squares */
+}
+
+#reset-button {
+    background-color: #dc3545; /* Red for reset */
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 1em;
+    margin-top: 20px;
+    transition: background-color 0.3s ease;
+}
+
+#reset-button:hover:not(:disabled) {
+    background-color: #c82333;
+}
+
+#reset-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+```
