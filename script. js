@@ -1,0 +1,213 @@
+تمام، هذا هو الملف الأخير
+```javascript
+// script.js
+const boardElement = document.getElementById('dama-board');
+const playerInfoElement = document.getElementById('player-info');
+const statusMessageElement = document.getElementById('status-message');
+const resetButton = document.getElementById('reset-button');
+
+const WS_URL = `ws://${window.location.hostname}:${window.location.port}`; // Connect to the same host/port as the web server
+let ws; // WebSocket connection
+let board = [];
+let selectedPiece = null; // { row, col }
+let currentPlayerId = -1; // The ID of this client (0 or 1)
+let currentTurn = 0; // Whose turn it is (0 or 1)
+let gameReady = false;
+
+function connectWebSocket() {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+        playerInfoElement.textContent = `Connecting to server...`;
+        statusMessageElement.textContent = `Waiting for opponent...`;
+        console.log('Connected to WebSocket server');
+    };
+
+    ws.onmessage = event => {
+        const data = JSON.parse(event.data);
+        console.log('Received:', data);
+
+        switch (data.type) {
+            case 'playerAssigned':
+                currentPlayerId = data.player;
+                playerInfoElement.textContent = `You are Player ${currentPlayerId + 1} (${currentPlayerId === 0 ? 'Dark' : 'Light'} pieces)`;
+                resetButton.disabled = (currentPlayerId !== 0); // Only Player 1 can reset
+                break;
+            case 'gameState':
+                board = data.board;
+                currentTurn = data.currentPlayer;
+                gameReady = true;
+                drawBoard();
+                updateStatus();
+                break;
+            case 'error':
+                statusMessageElement.textContent = `Error: ${data.message}`;
+                break;
+            case 'opponentDisconnected':
+                statusMessageElement.textContent = data.message;
+                playerInfoElement.textContent = `Opponent disconnected. Refresh to play again.`;
+                // Optionally disable moves, show a message, etc.
+                gameReady = false;
+                break;
+        }
+    };
+
+    ws.onclose = () => {
+        console.log('Disconnected from WebSocket server');
+        statusMessageElement.textContent = 'Disconnected from server. Please refresh the page.';
+        gameReady = false;
+    };
+
+    ws.onerror = error => {
+        console.error('WebSocket error:', error);
+        statusMessageElement.textContent = 'WebSocket connection error. Is the server running?';
+        gameReady = false;
+    };
+}
+
+function updateStatus() {
+    if (!gameReady) return;
+
+    if (currentTurn === currentPlayerId) {
+        statusMessageElement.textContent = "It's your turn!";
+        statusMessageElement.style.color = '#28a745'; // Green
+    } else {
+        statusMessageElement.textContent = `Waiting for Player ${currentTurn + 1}'s move...`;
+        statusMessageElement.style.color = '#ffc107'; // Yellow
+    }
+}
+
+function drawBoard() {
+    boardElement.innerHTML = ''; // Clear existing board
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const square = document.createElement('div');
+            square.classList.add('square');
+            square.dataset.row = r;
+            square.dataset.col = c;
+
+            // Determine square color
+            if ((r + c) % 2 === 0) {
+                square.classList.add('light-square');
+            } else {
+                square.classList.add('dark-square');
+            }
+
+            // Add piece if exists
+            const pieceType = board[r][c];
+            if (pieceType) {
+                const piece = document.createElement('div');
+                piece.classList.add('piece', pieceType);
+                square.appendChild(piece);
+            }
+
+            square.addEventListener('click', handleSquareClick);
+            boardElement.appendChild(square);
+        }
+    }
+    // Remove selection highlight if any
+    if (selectedPiece) {
+        const prevSelectedSquare = boardElement.querySelector(`.square[data-row="${selectedPiece.row}"][data-col="${selectedPiece.col}"]`);
+        if (prevSelectedSquare) {
+            prevSelectedSquare.querySelector('.piece')?.classList.remove('selected');
+        }
+    }
+}
+
+function handleSquareClick(event) {
+    if (!gameReady || currentTurn !== currentPlayerId) {
+        statusMessageElement.textContent = "It's not your turn yet or game not ready!";
+        statusMessageElement.style.color = '#dc3545'; // Red
+        return;
+    }
+
+    const row = parseInt(event.currentTarget.dataset.row);
+    const col = parseInt(event.currentTarget.dataset.col);
+
+    const pieceType = board[row][col];
+    const playerPieceType = currentPlayerId === 0 ? 'dark' : 'light';
+
+    // If a piece is selected
+    if (selectedPiece) {
+        // If clicking on the same selected piece again, deselect it
+        if (selectedPiece.row === row && selectedPiece.col === col) {
+            deselectPiece();
+        }
+        // If clicking on another piece of the same player, select it
+        else if (pieceType === playerPieceType) {
+            deselectPiece(); // Deselect previous
+            selectPiece(row, col);
+        }
+        // If clicking on an empty square, try to move
+        else if (pieceType === null) {
+            tryMove(selectedPiece.row, selectedPiece.col, row, col);
+        }
+    } else {
+        // No piece selected, try to select one
+        if (pieceType === playerPieceType) {
+            selectPiece(row, col);
+        } else {
+            statusMessageElement.textContent = "Please select your own piece.";
+            statusMessageElement.style.color = '#ffc107'; // Yellow
+        }
+    }
+}
+
+function selectPiece(row, col) {
+    selectedPiece = { row, col };
+    const squareElement = boardElement.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
+    if (squareElement && squareElement.querySelector('.piece')) {
+        squareElement.querySelector('.piece').classList.add('selected');
+    }
+    // You could also highlight valid move squares here
+}
+
+function deselectPiece() {
+    if (selectedPiece) {
+        const squareElement = boardElement.querySelector(`.square[data-row="${selectedPiece.row}"][data-col="${selectedPiece.col}"]`);
+        if (squareElement && squareElement.querySelector('.piece')) {
+            squareElement.querySelector('.piece').classList.remove('selected');
+        }
+        selectedPiece = null;
+    }
+}
+
+function tryMove(fromRow, fromCol, toRow, toCol) {
+    // Basic validation for one-step diagonal move for simplicity (no captures)
+    const dx = Math.abs(toCol - fromCol);
+    const dy = Math.abs(toRow - fromRow);
+
+    const pieceColor = board[fromRow][fromCol];
+    const forwardDirection = (pieceColor === 'dark') ? 1 : -1; // Dark moves down, Light moves up
+
+    // Check if it's a valid diagonal move and one square forward
+    if (dx === 1 && dy === 1 && (toRow - fromRow === forwardDirection) && board[toRow][toCol] === null) {
+        sendMove(fromRow, fromCol, toRow, toCol);
+        deselectPiece(); // Deselect after sending move
+    } else {
+        statusMessageElement.textContent = "Invalid move. (Basic Checkers rules: diagonal 1 step only)";
+        statusMessageElement.style.color = '#dc3545'; // Red
+    }
+}
+
+
+function sendMove(fromRow, fromCol, toRow, toCol) {
+    ws.send(JSON.stringify({
+        type: 'move',
+        move: { fromRow, fromCol, toRow, toCol },
+        playerMakingMove: currentPlayerId // Send who is making the move
+    }));
+}
+
+resetButton.addEventListener('click', () => {
+    if (currentPlayerId === 0) { // Only Player 1 can reset
+        ws.send(JSON.stringify({ type: 'reinitialize' }));
+    }
+});
+
+
+// Initial connection when the page loads
+connectWebSocket();
+```
+
+---
