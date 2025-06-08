@@ -1,0 +1,172 @@
+
+
+### **الملف 1: `server.js`**
+
+**انسخ الكود التالي ولصقه في ملف جديد سميه `server.js`:**
+
+```javascript
+// server.js
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+const path = require('path');
+
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
+// Serve static files (HTML, CSS, JS)
+app.use(express.static(path.join(__dirname)));
+
+const clients = []; // Array to store connected WebSocket clients
+let gameBoard = []; // Represents the Dama board state
+let currentPlayer = 0; // 0 for Player 1 (dark), 1 for Player 2 (light)
+let gameStarted = false;
+
+// Initialize the game board for checkers (basic)
+function initializeBoard() {
+    gameBoard = Array(8).fill(null).map(() => Array(8).fill(null));
+    // Player 1 (dark pieces) - top
+    for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 8; c++) {
+            if ((r + c) % 2 !== 0) { // Black squares
+                gameBoard[r][c] = 'dark';
+            }
+        }
+    }
+    // Player 2 (light pieces) - bottom
+    for (let r = 5; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            if ((r + c) % 2 !== 0) { // Black squares
+                gameBoard[r][c] = 'light';
+            }
+        }
+    }
+    // Set initial player
+    currentPlayer = 0; // Player 1 starts
+    gameStarted = false; // Reset game started flag
+}
+
+initializeBoard(); // Initialize board on server start
+
+wss.on('connection', ws => {
+    // Assign player number
+    if (clients.length < 2) {
+        ws.id = clients.length; // 0 for Player 1, 1 for Player 2
+        clients.push(ws);
+        console.log(`Player ${ws.id + 1} connected.`);
+
+        ws.send(JSON.stringify({ type: 'playerAssigned', player: ws.id }));
+
+        if (clients.length === 2) {
+            gameStarted = true;
+            console.log("Both players connected. Game starting!");
+            // Send initial board state to both players
+            clients.forEach(client => {
+                client.send(JSON.stringify({
+                    type: 'gameState',
+                    board: gameBoard,
+                    currentPlayer: currentPlayer,
+                    yourPlayerId: client.id
+                }));
+            });
+        }
+    } else {
+        ws.send(JSON.stringify({ type: 'error', message: 'Game full. Max 2 players.' }));
+        ws.close();
+        return;
+    }
+
+    ws.on('message', message => {
+        const data = JSON.parse(message);
+        console.log(`Received message from Player ${ws.id + 1}:`, data);
+
+        if (!gameStarted && data.type !== 'reinitialize') {
+            ws.send(JSON.stringify({ type: 'error', message: 'Waiting for another player to connect.' }));
+            return;
+        }
+
+        switch (data.type) {
+            case 'move':
+                const { fromRow, fromCol, toRow, toCol } = data.move;
+                const playerMakingMove = data.playerMakingMove;
+
+                // Basic validation (very minimal for this example)
+                // In a real game, you'd validate:
+                // 1. Is it the current player's turn? (important!)
+                // 2. Is the piece valid for the player?
+                // 3. Is the move valid according to Dama rules? (diagonal, one step, capture, etc.)
+                // 4. Is the destination square empty?
+
+                if (playerMakingMove !== currentPlayer) {
+                    ws.send(JSON.stringify({ type: 'error', message: 'It\'s not your turn!' }));
+                    return;
+                }
+
+                if (gameBoard[fromRow][fromCol] && gameBoard[toRow][toCol] === null) {
+                    // This is a VERY basic move logic. Doesn't handle captures or kinging.
+                    gameBoard[toRow][toCol] = gameBoard[fromRow][fromCol];
+                    gameBoard[fromRow][fromCol] = null;
+
+                    // Switch turn
+                    currentPlayer = 1 - currentPlayer; // Toggle between 0 and 1
+
+                    // Broadcast updated board and current player to all connected clients
+                    clients.forEach(client => {
+                        client.send(JSON.stringify({
+                            type: 'gameState',
+                            board: gameBoard,
+                            currentPlayer: currentPlayer,
+                            yourPlayerId: client.id // Send player ID so client knows who they are
+                        }));
+                    });
+                } else {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Invalid move. Check piece and destination.' }));
+                }
+                break;
+            case 'reinitialize':
+                if (ws.id === 0) { // Only player 1 can request reinitialize
+                    initializeBoard();
+                    console.log("Game reinitialized by Player 1.");
+                    clients.forEach(client => {
+                        client.send(JSON.stringify({
+                            type: 'gameState',
+                            board: gameBoard,
+                            currentPlayer: currentPlayer,
+                            yourPlayerId: client.id,
+                            message: "Game has been reset!"
+                        }));
+                    });
+                } else {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Only Player 1 can reset the game.' }));
+                }
+                break;
+        }
+    });
+
+    ws.on('close', () => {
+        console.log(`Player ${ws.id + 1} disconnected.`);
+        const index = clients.findIndex(client => client.id === ws.id);
+        if (index > -1) {
+            clients.splice(index, 1);
+        }
+        gameStarted = false; // Reset game if one player leaves
+        // Notify remaining player (if any) that opponent disconnected
+        if (clients.length > 0) {
+            clients[0].send(JSON.stringify({ type: 'opponentDisconnected', message: 'Your opponent has disconnected. Game reset.' }));
+        }
+        initializeBoard(); // Reset board if a player disconnects
+    });
+
+    ws.on('error', error => {
+        console.error('WebSocket error:', error);
+    });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+    console.log(`Open http://localhost:${PORT} in your browser.`);
+    console.log(`Share this URL with your friend to play.`);
+});
+```
